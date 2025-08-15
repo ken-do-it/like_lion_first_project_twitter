@@ -1,5 +1,6 @@
 import streamlit as st
 
+
 def show_auth_page() :
         
     st.title('🦄 유니콘다에 오신걸 환영합니다')
@@ -16,7 +17,10 @@ def show_auth_page() :
         col1, col2 = st.columns(2)
         with col1:
             if st.button('로그인', type='primary') :
-                st.success('로그인 성공! 환영합니다.')
+                # TODO: 여기에 실제 인증 로직을 넣고, 실패 시 메시지 표시
+                st.session_state.logged_in = False
+                st.rerun()
+                # st.success('로그인 성공! 환영합니다.')
             else:
                 st.error('로그인 실패! 아이디와 패스워드를 확인해주세요.')
         with col2:
