@@ -10,7 +10,7 @@ st.set_page_config(
     layout='wide',
     initial_sidebar_state="auto",  # 'auto' | 'expanded' | 'collapsed'
     menu_items={                  # 우상단 메뉴 커스터마이즈
-        "Get Help": "https://example.com/help",
+        "Get Help": "https://likelionfirstprojecttwitter-main.streamlit.app/",
         "Report a bug": "mailto:you@example.com",
         "About": "파이썬 트위터 프로젝트 - 간단한 SNS 데모"
     }
@@ -18,7 +18,7 @@ st.set_page_config(
 
 # --- 세션 기본값 ---
 if 'logged_in' not in st.session_state:
-    st.session_state.logged_in = True
+    st.session_state.logged_in = False
 
 
 def show_home_page() :
