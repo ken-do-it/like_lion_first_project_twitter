@@ -18,7 +18,7 @@ def show_auth_page() :
         with col1:
             if st.button('로그인', type='primary') :
                 # TODO: 여기에 실제 인증 로직을 넣고, 실패 시 메시지 표시
-                st.session_state.logged_in = True
+                st.session_state.logged_in = False
                 st.rerun()
                 # st.success('로그인 성공! 환영합니다.')
             else:
