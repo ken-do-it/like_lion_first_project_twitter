@@ -1,7 +1,7 @@
 import pandas as pd
 import os 
 
-csv_args = {'index':False, 'encoding':'utf=8'}
+csv_args = {'index':False, 'encoding':'utf-8'}
 
 def create_data_folder() :
     """data 폴더와 초기 CSV 파일들 생성"""

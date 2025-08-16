@@ -5,7 +5,7 @@ from datetime import datetime
 class UserManager:
     def __init__(self) :
         self.csv_path = 'data/users.csv'
-        self.csv_args = {'index':False, 'encoding':'utf=8'}
+        self.csv_args = {'index':False, 'encoding':'utf-8'}
         self.users_columns = ['user_id', 'user_name', 'password', 'created_at']
         self.ensure_csv_exists()
 
@@ -64,10 +64,12 @@ class UserManager:
     def login_user(self, user_name, password) :
         """사용자 로그인 검증"""
         user_info = self.load_users()
+        username = str(user_name).strip()
+        password = str(password).strip()
 
         #사용자 찾기 
         user_data = user_info [
-            (user_info['user_name'] == user_name) &
+            (user_info['user_name'] == username) &
             (user_info['password'] == password)
         ]
 
@@ -82,26 +84,5 @@ class UserManager:
         user_info = self.load_users()
         return len(user_info)
 
-
-
-    # def ensure_csv_exists(self) :
-    #     """CSV 파일이 없으면 생성"""
-
-    #     if not os.path.exists(self.csv_path) :
-    #         os.makedirs('data', exist_ok=True) # 만약 존재하면 error가 발생하기 때문에 True로 넘겨준다 이미 위에서 한번 검사했지만 다시 한번더 검사 
-    #         empty_users_info = pd.DataFrame(columns=self.users_columns)
-    #         empty_users_info.to_csv(self.csv_path, **self.csv_args)
-    
-
-    
-    # def load_users(self) :
-    #     ''' 사용자 데이터 로드'''
-
-    #     try :
-    #         return pd.read_csv(self.csv_path, encoding='utf-8')
-    #     except: 
-    #         return pd.DataFrame(columns=self.users_columns)
-        
-    
 
 
