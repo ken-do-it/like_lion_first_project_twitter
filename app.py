@@ -85,16 +85,17 @@ def show_home_page(current_user, post_mgr, user_mgr):
     with tab4:
         # 내가 누른 좋아요 기록에서 post_id 목록 뽑기
         likes_df = post_mgr.load_likes()
-        # 현재 유저가 누른 좋아요 post_id 목록
-        my_like_post_ids = set(
-            likes_df.loc[likes_df['user_id'] == current_user['user_id'], 'post_id'].astype(str)
-        )
+        my_liked_ids = []
+        if len(likes_df) > 0:
+            my_liked_ids = likes_df.loc[likes_df['user_id'] == current_user['user_id'], 'post_id'].unique().tolist()
 
-        liked_posts = posts_display[posts_display['post_id'].astype(str).isin(my_like_post_ids)]
+        liked_posts = posts_display[posts_display['post_id'].isin(my_liked_ids)]
+
         if len(liked_posts) == 0:
             st.info("아직 좋아요한 글이 없습니다.")
         else:
             for _, post in liked_posts.iterrows():
+                # 키 충돌 방지용 prefix
                 show_post_item(post, current_user, post_mgr, view_prefix="liked")
 
 
@@ -352,7 +353,7 @@ def show_profile_page(current_user, post_mgr, user_mgr, skills_mgr):
             format_func=lambda x: f"이미지 {available_images.index(x) + 1}"
         )
         preview_image = custom_image_url if custom_image_url else selected_image
-        st.image(preview_image, width=100, caption="선택된 이미지")
+        st.image(current_image, width=100, caption="현재 이미지")
         if st.button("💾 프로필 이미지 변경", type="primary"):
             image_to_save = custom_image_url if custom_image_url else selected_image
             success = user_mgr.update_profile_image(current_user['user_id'], image_to_save)
@@ -430,47 +431,47 @@ def show_profile_page(current_user, post_mgr, user_mgr, skills_mgr):
     #         st.rerun()
 
 
-def show_other_profile_page(view_user_id, user_mgr, post_mgr, current_user):
-    users_df = user_mgr.load_users()
-    user_row = users_df[users_df['user_id'] == view_user_id]
-    if len(user_row) == 0:
-        st.error("존재하지 않는 사용자입니다.")
-        return
-    user_info = user_row.iloc[0]
-    st.header(f"👤 {user_info['user_name']}님의 프로필 (읽기 전용)")
-    # 프로필 이미지 안전하게 처리
-    profile_image = user_info.get('profile_image')
-    if pd.isna(profile_image) or not profile_image:
-        default_image = "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=120&h=120&fit=crop&crop=face"
-        st.image(default_image, width=100)
-    else:
-        st.image(str(profile_image), width=100)
-    st.caption(f"가입일: {user_info['created_at']}")
-    st.divider()
+# def show_other_profile_page(view_user_id, user_mgr, post_mgr, current_user):
+#     users_df = user_mgr.load_users()
+#     user_row = users_df[users_df['user_id'] == view_user_id]
+#     if len(user_row) == 0:
+#         st.error("존재하지 않는 사용자입니다.")
+#         return
+#     user_info = user_row.iloc[0]
+#     st.header(f"👤 {user_info['user_name']}님의 프로필 (읽기 전용)")
+#     # 프로필 이미지 안전하게 처리
+#     profile_image = user_info.get('profile_image')
+#     if pd.isna(profile_image) or not profile_image:
+#         default_image = "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=120&h=120&fit=crop&crop=face"
+#         st.image(default_image, width=100)
+#     else:
+#         st.image(str(profile_image), width=100)
+#     st.caption(f"가입일: {user_info['created_at']}")
+#     st.divider()
 
-    posts_with_likes = post_mgr.get_posts_with_likes()
-    posts_display = posts_with_likes.merge(
-        users_df[['user_id', 'user_name', 'profile_image']],
-        on='user_id',
-        how='left'
-    )
+#     posts_with_likes = post_mgr.get_posts_with_likes()
+#     posts_display = posts_with_likes.merge(
+#         users_df[['user_id', 'user_name', 'profile_image']],
+#         on='user_id',
+#         how='left'
+#     )
 
-    tab1, tab2 = st.tabs(["✍️ 작성한 글", "🔁 리트윗한 글"])
-    with tab1:
-        my_posts = posts_display[posts_display['user_id'] == view_user_id]
-        st.subheader(f"{user_info['user_name']}님이 작성한 글")
-        for _, post in my_posts.iterrows():
-            st.markdown(post['content'])
-    with tab2:
-        my_retweets = posts_display[
-            (posts_display['user_id'] == view_user_id) &
-            (posts_display['is_retweet'] == True)
-        ]
-        st.subheader(f"{user_info['user_name']}님이 리트윗한 글")
-        for _, post in my_retweets.iterrows():
-            st.markdown(post['content'])
+#     tab1, tab2 = st.tabs(["✍️ 작성한 글", "🔁 리트윗한 글"])
+#     with tab1:
+#         my_posts = posts_display[posts_display['user_id'] == view_user_id]
+#         st.subheader(f"{user_info['user_name']}님이 작성한 글")
+#         for _, post in my_posts.iterrows():
+#             st.markdown(post['content'])
+#     with tab2:
+#         my_retweets = posts_display[
+#             (posts_display['user_id'] == view_user_id) &
+#             (posts_display['is_retweet'] == True)
+#         ]
+#         st.subheader(f"{user_info['user_name']}님이 리트윗한 글")
+#         for _, post in my_retweets.iterrows():
+#             st.markdown(post['content'])
 
-    st.info(f"현재 [{user_info['user_name']}]님의 페이지를 보고 있습니다.")
+#     st.info(f"현재 [{user_info['user_name']}]님의 페이지를 보고 있습니다.")
 
 # 매니저 초기화
 @st.cache_resource
