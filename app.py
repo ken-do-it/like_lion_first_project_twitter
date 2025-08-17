@@ -365,6 +365,30 @@ def show_profile_page(current_user, post_mgr, user_mgr, skills_mgr):
                 st.error("이미지 변경에 실패했습니다.")
         st.divider()
 
+# def show_data_info () :
+#     st.header("📊 저장된 데이터 확인")
+
+#     user_mgr = UserManager()
+#     users_df = user_mgr.load_users()
+
+#     st.subheader("👥 사용자 목록")
+
+#     if len(users_df) > 0:
+#         # 비밀번호 숨기기
+#         display_df = users_df.copy()
+#         display_df['password'] = '***'
+#         st.dataframe(display_df, use_container_width=True)
+
+#         # 간단한 통계
+#         col1, col2 = st.columns(2)
+#         with col1:
+#             st.metric("총 사용자 수", len(users_df))
+#         with col2:
+#             today_users = len(users_df[users_df['created_at'] == current_user['created_at']])
+#             st.metric("오늘 가입자", today_users)
+#     else:
+#         st.warning("등록된 사용자가 없습니다.")
+
     # 내가 쓴 글 목록
     # st.subheader("📝 내가 작성한 프롬프트")
 
@@ -535,9 +559,14 @@ else:
 
     menu = st.sidebar.selectbox(
     "선택하세요",
-    ["🏠 홈", "✍️ 글쓰기", "👤 프로필",'📊 데이터 확인'],
-    index=["🏠 홈", "✍️ 글쓰기", "👤 프로필",'📊 데이터 확인'].index(st.session_state.menu)
+    ["🏠 홈", "✍️ 글쓰기", "👤 프로필"],
+    index=["🏠 홈", "✍️ 글쓰기", "👤 프로필"].index(st.session_state.menu)
     )
+
+    # "선택하세요",
+    # ["🏠 홈", "✍️ 글쓰기", "👤 프로필",'📊 데이터 확인'],
+    # index=["🏠 홈", "✍️ 글쓰기", "👤 프로필",'📊 데이터 확인'].index(st.session_state.menu)
+    # )
 
         # 메뉴 변경 감지
     if menu != st.session_state.menu:
@@ -552,6 +581,9 @@ else:
         show_write_page(current_user, post_mgr)
     elif menu == "👤 프로필":
         show_profile_page(current_user, post_mgr, user_mgr, skills_mgr)
+    # elif menu == "📊 데이터 확인":
+    #     show_data_info()
+
 
     # if menu == "🏠 홈" :
     #     st.header('📝 최근 뉴스')
