@@ -1,7 +1,7 @@
 import pandas as pd
 import os 
 
-csv_args = {'index':False, 'encoding':'utf=8'}
+csv_args = {'index':False, 'encoding':'utf-8'}
 
 def create_data_folder() :
     """data 폴더와 초기 CSV 파일들 생성"""
@@ -29,12 +29,7 @@ def create_data_folder() :
         empty_likes = pd.DataFrame(columns=likes_columns)
         empty_likes.to_csv('data/likes.csv', **csv_args)
         print("📄 data/likes.csv 파일이 생성되었습니다.")
-    # 빈 re_twit.csv 파일 생성 (3단계용)
-    if not os.path.exists('data/re_twits.csv') :
-        re_twits_columns = ['re_twit_id', 'user_id', 'post_id', 'time_stamp']
-        empty_re_twits = pd.DataFrame(columns=re_twits_columns)
-        empty_re_twits.to_csv('data/re_twits.csv', **csv_args)
-        print("📄 data/re_twits.csv 파일이 생성되었습니다.")
+
     print("✅ 초기 설정이 완료되었습니다!")
 
 if __name__ == '__main__' :
