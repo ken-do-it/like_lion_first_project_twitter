@@ -366,7 +366,6 @@ def show_profile_page(current_user, post_mgr, user_mgr, skills_mgr):
         st.divider()
 
 
-
 # 매니저 초기화
 @st.cache_resource
 def init_managers():
@@ -448,5 +447,4 @@ else:
         show_write_page(current_user, post_mgr)
     elif menu == "👤 프로필":
         show_profile_page(current_user, post_mgr, user_mgr, skills_mgr)
-   
 
