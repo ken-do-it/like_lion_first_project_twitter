@@ -11,7 +11,7 @@ class PostManager:
         self.setup_files()
         # In-memory like storage (alternative to CSV)
         self._likes_cache = {}
-        # self._warmup_likes_cache()                  # ← 추가: CSV → 캐시 적재
+        self._warmup_likes_cache()                  # ← 추가: CSV → 캐시 적재
 
     def setup_files(self):
         """CSV 파일이 없으면 생성"""

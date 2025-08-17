@@ -85,17 +85,16 @@ def show_home_page(current_user, post_mgr, user_mgr):
     with tab4:
         # 내가 누른 좋아요 기록에서 post_id 목록 뽑기
         likes_df = post_mgr.load_likes()
-        my_liked_ids = []
-        if len(likes_df) > 0:
-            my_liked_ids = likes_df.loc[likes_df['user_id'] == current_user['user_id'], 'post_id'].unique().tolist()
+        # 현재 유저가 누른 좋아요 post_id 목록
+        my_like_post_ids = set(
+            likes_df.loc[likes_df['user_id'] == current_user['user_id'], 'post_id'].astype(str)
+        )
 
-        liked_posts = posts_display[posts_display['post_id'].isin(my_liked_ids)]
-
+        liked_posts = posts_display[posts_display['post_id'].astype(str).isin(my_like_post_ids)]
         if len(liked_posts) == 0:
             st.info("아직 좋아요한 글이 없습니다.")
         else:
             for _, post in liked_posts.iterrows():
-                # 키 충돌 방지용 prefix
                 show_post_item(post, current_user, post_mgr, view_prefix="liked")
 
 
