@@ -1,0 +1,6 @@
+skill_id,user_id,user_name,skill_name,level,created_at,updated_at
+6e8ca871,user_003,kevin,Python,30,2025-08-17 15:50:10,2025-08-17 15:50:10
+84318ff1,user_003,kevin,JavaScript,70,2025-08-17 15:49:55,2025-08-17 15:49:55
+3bfb351c,user_002,lion,JavaScript,70,2025-08-17 15:45:17,2025-08-17 15:45:17
+9ededf96,user_002,lion,HTML & CSS,80,2025-08-17 15:44:34,2025-08-17 15:44:34
+0c5479e6,user_003,kevin,HTML & CSS,80,2025-08-17 15:38:36,2025-08-17 15:38:36

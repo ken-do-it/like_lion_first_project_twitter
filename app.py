@@ -4,6 +4,8 @@ import time
 from auth import show_auth_page, logout_user
 from user_manager import UserManager
 from post_manager import PostManager
+from skills_manager import SkillsManager
+
 
 
 st.set_page_config(
@@ -53,7 +55,7 @@ def show_home_page(current_user, post_mgr, user_mgr):
     )
 
     # 탭 UI
-    tab1, tab2, tab3 = st.tabs(["🏠 홈", "✍️ 내가 쓴 글", "🔁 리트윗한 글"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🏠 홈", "✍️ 내가 쓴 글", "🔁 리트윗한 글", "❤️ 내가 좋아요한 글"])
 
     # 전체 글
     with tab1:
@@ -79,6 +81,24 @@ def show_home_page(current_user, post_mgr, user_mgr):
         for _, post in my_retweets.iterrows():
             show_post_item(post, current_user, post_mgr, view_prefix="retweet")
 
+    # 내가 좋아요한 글
+    with tab4:
+        # 내가 누른 좋아요 기록에서 post_id 목록 뽑기
+        likes_df = post_mgr.load_likes()
+        my_liked_ids = []
+        if len(likes_df) > 0:
+            my_liked_ids = likes_df.loc[likes_df['user_id'] == current_user['user_id'], 'post_id'].unique().tolist()
+
+        liked_posts = posts_display[posts_display['post_id'].isin(my_liked_ids)]
+
+        if len(liked_posts) == 0:
+            st.info("아직 좋아요한 글이 없습니다.")
+        else:
+            for _, post in liked_posts.iterrows():
+                # 키 충돌 방지용 prefix
+                show_post_item(post, current_user, post_mgr, view_prefix="liked")
+
+
 def show_post_item(post, current_user, post_mgr, view_prefix=""):
     """게시글 하나 렌더링 (홈/탭 공통)"""
     key_prefix = f"{view_prefix}_{post['post_id']}"  # ← 이 줄 추가!
@@ -86,7 +106,12 @@ def show_post_item(post, current_user, post_mgr, view_prefix=""):
         # 상단: 아바타 + 사용자/시간
         a, b = st.columns([1, 11])
         with a:
-            avatar = post.get('profile_image') or "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=120&h=120&fit=crop&crop=face"
+            # 프로필 이미지 안전하게 처리 (NaN 체크)
+            profile_image = post.get('profile_image')
+            if pd.isna(profile_image) or not profile_image:
+                avatar = "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=120&h=120&fit=crop&crop=face"
+            else:
+                avatar = str(profile_image)
             st.image(avatar, width=50)
         with b:
             ts = post.get('time_stamp', '')
@@ -240,7 +265,7 @@ def show_write_page(current_user, post_mgr):
 
 
 
-def show_profile_page(current_user, post_mgr, user_mgr):
+def show_profile_page(current_user, post_mgr, user_mgr, skills_mgr):
     """프로필 페이지"""
     st.header("👤 내 프로필")
     
@@ -254,35 +279,91 @@ def show_profile_page(current_user, post_mgr, user_mgr):
         st.caption(f"가입일: {current_user['created_at']}")
     
     st.divider()
-    
-    # 프로필 이미지 변경 섹션
-    st.subheader("🖼️ 프로필 이미지 변경")
-    available_images = user_mgr.get_available_profile_images()
-    current_image = user_mgr.get_user_profile_image(current_user['user_id'])
-    current_index = 0
-    for i, img in enumerate(available_images):
-        if img == current_image:
-            current_index = i
-            break
-    custom_image_url = st.text_input("직접 이미지 URL 입력 (선택)", "")
-    selected_image = st.selectbox(
-        "프로필 이미지를 선택하세요:",
-        options=available_images,
-        index=current_index,
-        format_func=lambda x: f"이미지 {available_images.index(x) + 1}"
-    )
-    preview_image = custom_image_url if custom_image_url else selected_image
-    st.image(preview_image, width=100, caption="선택된 이미지")
-    if st.button("💾 프로필 이미지 변경", type="primary"):
-        image_to_save = custom_image_url if custom_image_url else selected_image
-        success = user_mgr.update_profile_image(current_user['user_id'], image_to_save)
-        if success:
-            st.success("프로필 이미지가 변경되었습니다!")
-            st.session_state.current_user['profile_image'] = image_to_save
-            st.rerun()
-        else:
-            st.error("이미지 변경에 실패했습니다.")
-    st.divider()
+
+    col1, col2 = st.columns([2,1])
+
+    # 추가 폼
+    with col1 :
+        with st.form(f"add_skill_form_{current_user['user_id']}", clear_on_submit=True):
+            new_skill = st.text_input("기술명 추가", "")
+            new_level = st.slider("숙련도(%)", 0, 100, 50)
+            submitted = st.form_submit_button("➕ 추가")
+            if submitted:
+                if new_skill.strip():
+                    skills_mgr.add_skill(
+                        user_id=current_user['user_id'],
+                        user_name=current_user['user_name'],
+                        skill_name=new_skill.strip(),
+                        level=new_level
+                    )
+                    st.success("추가되었습니다.")
+                    st.rerun()
+                else:
+                    st.warning("기술명을 입력해주세요.")
+
+        # 목록 표시
+        rows = skills_mgr.list_user_skills(current_user['user_id'])
+        for _, row in rows.iterrows():
+            skill_id = row['skill_id']
+            name = row['skill_name']
+            level = int(row['level'])
+
+            cols = st.columns([3, 5, 2, 2])
+            with cols[0]:
+                new_name = st.text_input("기술명", value=str(name), key=f"skill_name_{skill_id}")
+                if new_name != name:
+                    if new_name.strip():
+                        skills_mgr.rename_skill(skill_id, new_name.strip())
+                        st.toast("이름이 변경되었습니다.")
+                        st.rerun()
+                    else:
+                        st.warning("기술명은 비워둘 수 없습니다.")
+
+            with cols[1]:
+                st.progress(level)
+
+            with cols[2]:
+                new_lv = st.number_input("수정", min_value=0, max_value=100, value=level, key=f"skill_level_{skill_id}")
+                if new_lv != level:
+                    skills_mgr.update_skill_level(skill_id, int(new_lv))
+                    st.toast("숙련도를 업데이트했습니다.")
+                    st.rerun()
+
+            with cols[3]:
+                if st.button("🗑️ 삭제", key=f"del_skill_{skill_id}"):
+                    skills_mgr.delete_skill(skill_id)
+                    st.toast("삭제되었습니다.")
+                    st.rerun()
+
+    with col2 :
+        # 프로필 이미지 변경 섹션
+        st.subheader("🖼️ 프로필 이미지 변경")
+        available_images = user_mgr.get_available_profile_images()
+        current_image = user_mgr.get_user_profile_image(current_user['user_id'])
+        current_index = 0
+        for i, img in enumerate(available_images):
+            if img == current_image:
+                current_index = i
+                break
+        custom_image_url = st.text_input("직접 이미지 URL 입력 (선택)", "")
+        selected_image = st.selectbox(
+            "프로필 이미지를 선택하세요:",
+            options=available_images,
+            index=current_index,
+            format_func=lambda x: f"이미지 {available_images.index(x) + 1}"
+        )
+        preview_image = custom_image_url if custom_image_url else selected_image
+        st.image(preview_image, width=100, caption="선택된 이미지")
+        if st.button("💾 프로필 이미지 변경", type="primary"):
+            image_to_save = custom_image_url if custom_image_url else selected_image
+            success = user_mgr.update_profile_image(current_user['user_id'], image_to_save)
+            if success:
+                st.success("프로필 이미지가 변경되었습니다!")
+                st.session_state.current_user['profile_image'] = image_to_save
+                st.rerun()
+            else:
+                st.error("이미지 변경에 실패했습니다.")
+        st.divider()
 
     # 내가 쓴 글 목록
     # st.subheader("📝 내가 작성한 프롬프트")
@@ -350,21 +431,64 @@ def show_profile_page(current_user, post_mgr, user_mgr):
     #         st.rerun()
 
 
+def show_other_profile_page(view_user_id, user_mgr, post_mgr, current_user):
+    users_df = user_mgr.load_users()
+    user_row = users_df[users_df['user_id'] == view_user_id]
+    if len(user_row) == 0:
+        st.error("존재하지 않는 사용자입니다.")
+        return
+    user_info = user_row.iloc[0]
+    st.header(f"👤 {user_info['user_name']}님의 프로필 (읽기 전용)")
+    # 프로필 이미지 안전하게 처리
+    profile_image = user_info.get('profile_image')
+    if pd.isna(profile_image) or not profile_image:
+        default_image = "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=120&h=120&fit=crop&crop=face"
+        st.image(default_image, width=100)
+    else:
+        st.image(str(profile_image), width=100)
+    st.caption(f"가입일: {user_info['created_at']}")
+    st.divider()
+
+    posts_with_likes = post_mgr.get_posts_with_likes()
+    posts_display = posts_with_likes.merge(
+        users_df[['user_id', 'user_name', 'profile_image']],
+        on='user_id',
+        how='left'
+    )
+
+    tab1, tab2 = st.tabs(["✍️ 작성한 글", "🔁 리트윗한 글"])
+    with tab1:
+        my_posts = posts_display[posts_display['user_id'] == view_user_id]
+        st.subheader(f"{user_info['user_name']}님이 작성한 글")
+        for _, post in my_posts.iterrows():
+            st.markdown(post['content'])
+    with tab2:
+        my_retweets = posts_display[
+            (posts_display['user_id'] == view_user_id) &
+            (posts_display['is_retweet'] == True)
+        ]
+        st.subheader(f"{user_info['user_name']}님이 리트윗한 글")
+        for _, post in my_retweets.iterrows():
+            st.markdown(post['content'])
+
+    st.info(f"현재 [{user_info['user_name']}]님의 페이지를 보고 있습니다.")
+
 # 매니저 초기화
 @st.cache_resource
 def init_managers():
     try:
         user_mgr = UserManager()
         post_mgr = PostManager()
-        return user_mgr, post_mgr
+        skills_mgr = SkillsManager()   # 추가
+        return user_mgr, post_mgr, skills_mgr
     except Exception as e:
         st.error(f"매니저 초기화 중 오류가 발생했습니다: {str(e)}")
-        return None, None
+        return None, None, None
 
-user_mgr, post_mgr = init_managers()
+user_mgr, post_mgr, skills_mgr = init_managers()
 
 # 매니저 초기화 확인
-if user_mgr is None or post_mgr is None:
+if user_mgr is None or post_mgr is None or skills_mgr is None:
     st.error("⚠️ 시스템 초기화에 실패했습니다. 페이지를 새로고침해주세요.")
     st.stop()
 
@@ -427,14 +551,7 @@ else:
     elif menu == "✍️ 글쓰기":
         show_write_page(current_user, post_mgr)
     elif menu == "👤 프로필":
-        show_profile_page(current_user, post_mgr, user_mgr)
-
-
-
-
-
-
-
+        show_profile_page(current_user, post_mgr, user_mgr, skills_mgr)
 
     # if menu == "🏠 홈" :
     #     st.header('📝 최근 뉴스')
