@@ -365,9 +365,6 @@ def show_profile_page(current_user, post_mgr, user_mgr, skills_mgr):
                 st.error("이미지 변경에 실패했습니다.")
         st.divider()
 
- 
-
-
 
 # 매니저 초기화
 @st.cache_resource
@@ -431,9 +428,11 @@ else:
 
     menu = st.sidebar.selectbox(
     "선택하세요",
-    ["🏠 홈", "✍️ 글쓰기", "👤 프로필",'📊 데이터 확인'],
-    index=["🏠 홈", "✍️ 글쓰기", "👤 프로필",'📊 데이터 확인'].index(st.session_state.menu)
+    ["🏠 홈", "✍️ 글쓰기", "👤 프로필"],
+    index=["🏠 홈", "✍️ 글쓰기", "👤 프로필"].index(st.session_state.menu)
     )
+
+
 
         # 메뉴 변경 감지
     if menu != st.session_state.menu:
@@ -448,6 +447,4 @@ else:
         show_write_page(current_user, post_mgr)
     elif menu == "👤 프로필":
         show_profile_page(current_user, post_mgr, user_mgr, skills_mgr)
-
-    
 
