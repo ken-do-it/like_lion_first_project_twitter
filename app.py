@@ -254,35 +254,80 @@ def show_profile_page(current_user, post_mgr, user_mgr):
         st.caption(f"가입일: {current_user['created_at']}")
     
     st.divider()
-    
-    # 프로필 이미지 변경 섹션
-    st.subheader("🖼️ 프로필 이미지 변경")
-    available_images = user_mgr.get_available_profile_images()
-    current_image = user_mgr.get_user_profile_image(current_user['user_id'])
-    current_index = 0
-    for i, img in enumerate(available_images):
-        if img == current_image:
-            current_index = i
-            break
-    custom_image_url = st.text_input("직접 이미지 URL 입력 (선택)", "")
-    selected_image = st.selectbox(
-        "프로필 이미지를 선택하세요:",
-        options=available_images,
-        index=current_index,
-        format_func=lambda x: f"이미지 {available_images.index(x) + 1}"
-    )
-    preview_image = custom_image_url if custom_image_url else selected_image
-    st.image(preview_image, width=100, caption="선택된 이미지")
-    if st.button("💾 프로필 이미지 변경", type="primary"):
-        image_to_save = custom_image_url if custom_image_url else selected_image
-        success = user_mgr.update_profile_image(current_user['user_id'], image_to_save)
-        if success:
-            st.success("프로필 이미지가 변경되었습니다!")
-            st.session_state.current_user['profile_image'] = image_to_save
-            st.rerun()
+
+    col1, col2 = st.columns(2)
+
+    with col1 :
+        # 내 기술들 프로세스바 
+        # progress bar
+        st.subheader("💻 내 기술들")
+        # 사용자별 기술 목록 세션키 생성
+        skills_key = f"skills_{current_user['user_id']}"
+        if skills_key not in st.session_state:
+            st.session_state[skills_key] = []
+
+        # 기술 추가 폼
+        with st.form(f"add_skill_form_{current_user['user_id']}", clear_on_submit=True):
+            new_skill = st.text_input("기술명 추가", "")
+            new_level = st.slider("숙련도(%)", 0, 100, 50)
+            submitted = st.form_submit_button("➕ 추가")
+            if submitted and new_skill.strip():
+                st.session_state[skills_key].append({"name": new_skill.strip(), "level": new_level})
+                st.rerun()
+
+        # 기술이 하나라도 있을 때만 표시
+        if st.session_state[skills_key]:
+            for idx, skill in enumerate(st.session_state[skills_key]):
+                skill_container = st.container()
+                with skill_container:
+                    cols = st.columns([3, 5, 2, 2])
+                    with cols[0]:
+                        st.write(f"**{skill['name']}**")
+                    with cols[1]:
+                        st.progress(skill['level'])
+                    with cols[2]:
+                        new_val = st.number_input(
+                            "수정", min_value=0, max_value=100, value=skill['level'],
+                            key=f"edit_skill_{current_user['user_id']}_{idx}"
+                        )
+                        if new_val != skill['level']:
+                            st.session_state[skills_key][idx]['level'] = new_val
+                            st.rerun()
+                    with cols[3]:
+                        if st.button("🗑️ 삭제", key=f"del_skill_{current_user['user_id']}_{idx}"):
+                            st.session_state[skills_key].pop(idx)
+                            st.rerun()
         else:
-            st.error("이미지 변경에 실패했습니다.")
-    st.divider()
+            st.info("아직 등록된 기술이 없습니다. 기술을 추가해보세요!")
+    with col2 :
+        # 프로필 이미지 변경 섹션
+        st.subheader("🖼️ 프로필 이미지 변경")
+        available_images = user_mgr.get_available_profile_images()
+        current_image = user_mgr.get_user_profile_image(current_user['user_id'])
+        current_index = 0
+        for i, img in enumerate(available_images):
+            if img == current_image:
+                current_index = i
+                break
+        custom_image_url = st.text_input("직접 이미지 URL 입력 (선택)", "")
+        selected_image = st.selectbox(
+            "프로필 이미지를 선택하세요:",
+            options=available_images,
+            index=current_index,
+            format_func=lambda x: f"이미지 {available_images.index(x) + 1}"
+        )
+        preview_image = custom_image_url if custom_image_url else selected_image
+        st.image(preview_image, width=100, caption="선택된 이미지")
+        if st.button("💾 프로필 이미지 변경", type="primary"):
+            image_to_save = custom_image_url if custom_image_url else selected_image
+            success = user_mgr.update_profile_image(current_user['user_id'], image_to_save)
+            if success:
+                st.success("프로필 이미지가 변경되었습니다!")
+                st.session_state.current_user['profile_image'] = image_to_save
+                st.rerun()
+            else:
+                st.error("이미지 변경에 실패했습니다.")
+        st.divider()
 
     # 내가 쓴 글 목록
     # st.subheader("📝 내가 작성한 프롬프트")
