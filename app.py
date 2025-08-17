@@ -64,10 +64,10 @@ def show_home_page(current_user, post_mgr, user_mgr):
         return
     
 
-    # 사용자 이름 가져오기 위해 users와 조인
+    # 사용자 이름과 프로필 이미지 가져오기 위해 users와 조인
     users_df = user_mgr.load_users()
     posts_display = posts_with_likes.merge(
-        users_df[['user_id', 'user_name']],
+        users_df[['user_id', 'user_name', 'profile_image']],
         on='user_id',
         how='left'
     )
@@ -81,7 +81,9 @@ def show_home_page(current_user, post_mgr, user_mgr):
             col1, col2 = st.columns([1, 11])
 
             with col1:
-                st.image("https://images.unsplash.com/photo-1743449661678-c22cd73b338a?w=500&auto=format&fit=crop&q=60", width=50)
+                # 사용자별 프로필 이미지 표시
+                profile_image = post.get('profile_image', "https://images.unsplash.com/photo-1743449661678-c22cd73b338a?w=500&auto=format&fit=crop&q=60")
+                st.image(profile_image, width=50)
 
             with col2:
                 # 사용자 이름 + 시간
@@ -237,11 +239,48 @@ def show_profile_page(current_user, post_mgr, user_mgr):
     col1, col2 = st.columns([1, 3])
     
     with col1:
-        st.image("https://images.unsplash.com/photo-1743449661678-c22cd73b338a?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxmZWF0dXJlZC1waG90b3MtZmVlZHwzfHx8fHx8", width=100)
+        # 현재 사용자의 프로필 이미지 표시
+        current_profile_image = user_mgr.get_user_profile_image(current_user['user_id'])
+        st.image(current_profile_image, width=100)
     
     with col2:
         st.subheader(f"**{current_user['user_name']}**")
         st.caption(f"가입일: {current_user['created_at']}")
+    
+    st.divider()
+    
+    # 프로필 이미지 변경 섹션
+    st.subheader("🖼️ 프로필 이미지 변경")
+    
+    # 사용 가능한 프로필 이미지 목록
+    available_images = user_mgr.get_available_profile_images()
+    
+    # 현재 선택된 이미지 찾기
+    current_image = user_mgr.get_user_profile_image(current_user['user_id'])
+    current_index = 0
+    for i, img in enumerate(available_images):
+        if img == current_image:
+            current_index = i
+            break
+    
+    # 이미지 선택 드롭다운
+    selected_image = st.selectbox(
+        "프로필 이미지를 선택하세요:",
+        options=available_images,
+        index=current_index,
+        format_func=lambda x: f"이미지 {available_images.index(x) + 1}"
+    )
+    
+    # 선택된 이미지 미리보기
+    st.image(selected_image, width=100, caption="선택된 이미지")
+    
+    # 이미지 변경 버튼
+    if st.button("💾 프로필 이미지 변경", type="primary"):
+        if user_mgr.update_profile_image(current_user['user_id'], selected_image):
+            st.success("프로필 이미지가 변경되었습니다! 🎉")
+            st.rerun()
+        else:
+            st.error("이미지 변경 중 오류가 발생했습니다.")
     
     st.divider()
 
@@ -257,10 +296,10 @@ def show_profile_page(current_user, post_mgr, user_mgr):
             st.rerun()
         return
     
-    # 사용자 이름 가져오기 위해 users와 조인 (홈페이지와 동일한 방식)
+    # 사용자 이름과 프로필 이미지 가져오기 위해 users와 조인 (홈페이지와 동일한 방식)
     users_df = user_mgr.load_users()
     posts_display = posts_with_likes.merge(
-        users_df[['user_id', 'user_name']],
+        users_df[['user_id', 'user_name', 'profile_image']],
         on='user_id',
         how='left'
     )
@@ -273,9 +312,14 @@ def show_profile_page(current_user, post_mgr, user_mgr):
 
         for idx, post in my_posts.iterrows():
             with st.container():
-                col1, col2 = st.columns([8, 4])
+                col1, col2, col3 = st.columns([1, 7, 4])
 
                 with col1:
+                    # 프로필 이미지 표시
+                    profile_image = post.get('profile_image', "https://images.unsplash.com/photo-1743449661678-c22cd73b338a?w=500&auto=format&fit=crop&q=60")
+                    st.image(profile_image, width=40)
+
+                with col2:
                     # 내용 미리보기 (100자)
                     preview = post['content'][:100] + "..." if len(post['content']) > 100 else post['content']
                     st.markdown(f"**{preview}**")
@@ -292,7 +336,7 @@ def show_profile_page(current_user, post_mgr, user_mgr):
                     
                     st.caption(f"작성: {time_display} • 좋아요: {int(post['like_count'])}개")
 
-                with col2:
+                with col3:
                     if st.button("🗑️ 삭제", key=f"profile_del_{post['post_id']}"):
                         if post_mgr.delete_post(post['post_id'], current_user['user_id']):
                             st.success("삭제되었습니다!")
@@ -345,10 +389,21 @@ else:
     current_user = st.session_state.current_user    
 
     st.title('🦄 개발 유니콘다')
-    st.write(f'**{current_user["user_name"]}님 환영합니다**')
-
-
-    if st.sidebar.button("🚪 로그아웃", use_container_width=True):
+    
+    # 사이드바에 사용자 정보 표시
+    with st.sidebar:
+        # 사용자 프로필 이미지와 이름
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            current_profile_image = user_mgr.get_user_profile_image(current_user['user_id'])
+            st.image(current_profile_image, width=50)
+        with col2:
+            st.write(f"**{current_user['user_name']}님**")
+            st.caption("환영합니다! 👋")
+        
+        st.divider()
+        
+        if st.button("🚪 로그아웃", use_container_width=True):
             st.session_state.logged_in = False
             st.rerun() 
 

@@ -6,7 +6,7 @@ class UserManager:
     def __init__(self) :
         self.csv_path = 'data/users.csv'
         self.csv_args = {'index':False, 'encoding':'utf-8'}
-        self.users_columns = ['user_id', 'user_name', 'password', 'created_at']
+        self.users_columns = ['user_id', 'user_name', 'password', 'created_at', 'profile_image']
         self.ensure_csv_exists()
 
 
@@ -45,12 +45,24 @@ class UserManager:
         users_count = len(users_info)
         new_user_id = f"user_{users_count +1:03d}"
 
+        # 기본 프로필 이미지 설정 (랜덤하게 선택)
+        default_images = [
+            "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face",
+            "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face",
+            "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
+            "https://images.unsplash.com/photo-1494790108755-2616b612b786?w=150&h=150&fit=crop&crop=face",
+            "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face"
+        ]
+        import random
+        default_profile_image = random.choice(default_images)
+
         # 새 사용자 데이터
         new_user = {
             'user_id': new_user_id,
             'user_name': user_name,
             'password': password,
-            'created_at': datetime.now().strftime('%Y-%m-%d')
+            'created_at': datetime.now().strftime('%Y-%m-%d'),
+            'profile_image': default_profile_image
         }
 
         # DataFrame에 추가
@@ -83,6 +95,43 @@ class UserManager:
         """총 사용자 수 반환"""
         user_info = self.load_users()
         return len(user_info)
+
+    def get_user_profile_image(self, user_id):
+        """사용자의 프로필 이미지 URL 반환"""
+        users_info = self.load_users()
+        user_data = users_info[users_info['user_id'] == user_id]
+        
+        if len(user_data) > 0:
+            profile_image = user_data.iloc[0]['profile_image']
+            # NaN 체크 및 기본 이미지 반환
+            if pd.isna(profile_image) or not profile_image:
+                return "https://images.unsplash.com/photo-1743449661678-c22cd73b338a?w=150&h=150&fit=crop&q=60"
+            return profile_image
+        return "https://images.unsplash.com/photo-1743449661678-c22cd73b338a?w=150&h=150&fit=crop&q=60"
+
+    def update_profile_image(self, user_id, new_image_url):
+        """사용자의 프로필 이미지 업데이트"""
+        users_info = self.load_users()
+        user_idx = users_info[users_info['user_id'] == user_id].index
+        
+        if len(user_idx) > 0:
+            users_info.loc[user_idx[0], 'profile_image'] = new_image_url
+            self.save_users(users_info)
+            return True
+        return False
+
+    def get_available_profile_images(self):
+        """사용 가능한 프로필 이미지 목록 반환"""
+        return [
+            "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face",
+            "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face",
+            "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
+            "https://images.unsplash.com/photo-1494790108755-2616b612b786?w=150&h=150&fit=crop&crop=face",
+            "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face",
+            "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face",
+            "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop&crop=face",
+            "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&h=150&fit=crop&crop=face"
+        ]
 
 
 
