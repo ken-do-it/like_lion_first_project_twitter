@@ -1,8 +1,8 @@
 # post_manager.py
 import pandas as pd
 import os
-from datetime import datetime
 import uuid
+from datetime import datetime
 
 class PostManager:
     def __init__(self):
@@ -82,24 +82,40 @@ class PostManager:
         return True
 
     def retweet_post(self, user_id, original_post_id):
-        """포스트 리트윗"""
+        """Retweet a post, showing the original post's username in the content."""
         posts_df = self.load_posts()
-        
-        # 원본 포스트 찾기
+
+        # Find the original post
         original_post = posts_df[posts_df['post_id'] == original_post_id]
         if len(original_post) == 0:
             return False
-        
-        # 이미 리트윗했는지 확인
+
+        # Prevent duplicate retweets
         existing_retweet = posts_df[
-            (posts_df['user_id'] == user_id) & 
+            (posts_df['user_id'] == user_id) &
             (posts_df['original_post_id'] == original_post_id)
         ]
         if len(existing_retweet) > 0:
-            return False  # 이미 리트윗함
-        
-        # 리트윗 생성
-        retweet_content = f"🔁 리트윗: {original_post.iloc[0]['content']}"
+            return False
+
+        # Get original user_id and content
+        original_user_id = original_post.iloc[0]['user_id']
+        original_content = original_post.iloc[0]['content']
+
+        # Get original username from users.csv
+        try:
+            users_df = pd.read_csv('data/users.csv', encoding='utf-8')
+            user_row = users_df[users_df['user_id'] == original_user_id]
+            if len(user_row) > 0:
+                original_username = user_row.iloc[0]['user_name']
+            else:
+                original_username = original_user_id
+        except Exception:
+            original_username = original_user_id
+
+        # Compose retweet content
+        retweet_content = f"🔁 리트윗: {original_username}\n{original_content}"
+
         return self.create_post(user_id, retweet_content, True, original_post_id)
 
     def update_post(self, post_id, user_id, new_content):

@@ -1,27 +1,9 @@
 import streamlit as st
 import pandas as pd
+import time
 from auth import show_auth_page, logout_user
 from user_manager import UserManager
 from post_manager import PostManager
-
-st.markdown(
-    """
-    <style>
-    /* st.button의 래퍼 div 자체를 인라인으로 만들어 옆으로 붙게 하기 */
-    div.stButton {
-        display: inline-block;   /* 핵심! */
-        margin-right: 6px;       /* 버튼 사이 간격 */
-        margin-bottom: 0;        /* 아래 여백 제거해 세로로 안 밀리게 */
-    }
-    /* 버튼 자체 크기만 살짝 줄이기(선택) */
-    div.stButton > button {
-        padding: 0.35rem 0.55rem;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
 
 
 st.set_page_config(
@@ -37,136 +19,139 @@ st.set_page_config(
 )
 
 def show_home_page(current_user, post_mgr, user_mgr):
-    """홈 화면 - 실제 게시글 목록"""
-    # 안전장치: 매개변수 확인
+    """홈 화면 - 게시글 목록 + 액션바"""
+    # 안전장치
     if current_user is None or 'user_id' not in current_user:
         st.error("사용자 정보가 올바르지 않습니다.")
         return
-    
     if post_mgr is None:
         st.error("포스트 매니저가 초기화되지 않았습니다.")
         return
-    
     if user_mgr is None:
         st.error("사용자 매니저가 초기화되지 않았습니다.")
         return
-    
+
     st.header("📝 최근 프롬프트")
 
-    # 게시글 불러오기
+    # 데이터 로드
     posts_with_likes = post_mgr.get_posts_with_likes()
-
     if len(posts_with_likes) == 0:
         st.info("📝 아직 작성된 프롬프트가 없습니다. 첫 번째 프롬프트를 작성해보세요!")
         if st.button("✍️ 글쓰기로 이동"):
             st.session_state.menu = "✍️ 글쓰기"
             st.rerun()
         return
-    
 
-    # 사용자 이름과 프로필 이미지 가져오기 위해 users와 조인
     users_df = user_mgr.load_users()
+    if 'profile_image' not in users_df.columns:
+        users_df['profile_image'] = ""
+
     posts_display = posts_with_likes.merge(
         users_df[['user_id', 'user_name', 'profile_image']],
         on='user_id',
         how='left'
     )
 
-
-
-        # 게시글 하나씩 표시
-    for idx, post in posts_display.iterrows():
+    # 게시글 렌더링
+    for _, post in posts_display.iterrows():
         with st.container():
-            # 프로필 이미지와 정보
-            col1, col2 = st.columns([1, 11])
-
-            with col1:
-                # 사용자별 프로필 이미지 표시
-                profile_image = post.get('profile_image', "https://images.unsplash.com/photo-1743449661678-c22cd73b338a?w=500&auto=format&fit=crop&q=60")
-                st.image(profile_image, width=50)
-
-            with col2:
-                # 사용자 이름 + 시간
-                time_stamp = post['time_stamp']
-                if pd.isna(time_stamp):
+            # 상단: 아바타 + 사용자/시간
+            a, b = st.columns([1, 11])
+            with a:
+                avatar = post.get('profile_image') or "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=120&h=120&fit=crop&crop=face"
+                st.image(avatar, width=50)
+            with b:
+                # 시간 문자열 안전 처리
+                ts = post.get('time_stamp', '')
+                if pd.isna(ts) or not str(ts):
                     time_str = "시간 정보 없음"
                 else:
-                    try:
-                        time_str = str(time_stamp).split(' ')[1][:5]  # HH:MM
-                    except (AttributeError, IndexError):
-                        time_str = "시간 오류"
-                st.markdown(f"**{post['user_name']}** • {time_str}")
+                    s = str(ts).split(' ')
+                    time_str = s[1][:5] if len(s) > 1 else str(ts)
 
-                # 게시글 내용 (수정 모드 / 일반 모드)
-                if st.session_state.get('editing_post') == post['post_id']:
+                st.markdown(f"**{post.get('user_name', post['user_id'])}** • {time_str}")
+
+                # 본문: 리트윗 헤더 처리 + 인라인 수정 모드
+                if st.session_state.get('editing_post') == post['post_id'] and post['user_id'] == current_user['user_id']:
+                    # 수정 모드
                     with st.form(f"edit_form_{post['post_id']}", clear_on_submit=False):
-                        edited_content = st.text_area(
-                            "내용 수정",
-                            value=str(post['content']) if pd.notna(post['content']) else "",
-                            height=100,
-                            key=f"edit_content_{post['post_id']}"
-                        )
-                        col_save, col_cancel = st.columns(2)
-                        with col_save:
+                        edited = st.text_area("내용 수정", value=str(post.get('content', '') or ''), height=120)
+                        c1, c2 = st.columns(2)
+                        with c1:
                             if st.form_submit_button("💾 저장"):
-                                if edited_content and edited_content.strip():
-                                    if post_mgr.update_post(post['post_id'], current_user['user_id'], edited_content.strip()):
-                                        st.success("수정되었습니다!")
+                                if edited and edited.strip():
+                                    if post_mgr.update_post(post['post_id'], current_user['user_id'], edited.strip()):
+                                        st.toast("수정되었습니다 ✏️")
                                         st.session_state.editing_post = None
                                         st.rerun()
                                 else:
-                                    st.error("내용을 입력해주세요!")
-                        with col_cancel:
+                                    st.warning("내용을 입력해주세요.")
+                        with c2:
                             if st.form_submit_button("❌ 취소"):
                                 st.session_state.editing_post = None
                                 st.rerun()
                 else:
-                    if post.get('is_retweet', False):
-                        st.markdown(f"🔁 **리트윗:** {post['content']}")
+                    # 일반 표시 모드
+                    content = str(post.get('content', '') or '')
+                    if content.startswith("🔁 리트윗:"):
+                        header, body = (content.split("\n", 1) + [""])[:2]
+                        st.markdown(f"**{header}**")
+                        if body:
+                            st.markdown(body)
                     else:
-                        st.markdown(post['content'])
+                        st.markdown(content)
 
-                # -------------------
-                # 액션바 (좋아요 | 수정 | 삭제 | 리트윗)
-                # -------------------
+                # 액션바 --------------------------
                 is_liked = post_mgr.is_liked_by_user(current_user['user_id'], post['post_id'])
                 like_emoji = "❤️" if is_liked else "🤍"
-                like_count = int(post['like_count'])
+                like_count = int(post.get('like_count', 0))
 
-                # 버튼을 가로로 나란히 배치 + 약간의 간격
-                btn_cols = st.columns(4, gap="small")
+                c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
 
-                with btn_cols[0]:
+                # 좋아요
+                with c1:
                     if st.button(f"{like_emoji} {like_count}", key=f"like_{post['post_id']}"):
                         liked = post_mgr.toggle_like(current_user['user_id'], post['post_id'])
-                        st.success("좋아요!") if liked else st.info("좋아요 취소")
+                        st.toast("좋아요! ❤️" if liked else "좋아요 취소")
                         st.rerun()
 
-                with btn_cols[1]:
+                # 수정(작성자)
+                with c2:
                     if post['user_id'] == current_user['user_id']:
                         if st.button("✏️", key=f"edit_{post['post_id']}", help="수정"):
                             st.session_state.editing_post = post['post_id']
+                            st.toast("수정 모드로 전환 ✏️")
                             st.rerun()
 
-                with btn_cols[2]:
+                # 삭제(작성자) - 2단계 확인
+                with c3:
                     if post['user_id'] == current_user['user_id']:
                         if st.button("🗑️", key=f"del_{post['post_id']}", help="삭제"):
-                            if post_mgr.delete_post(post['post_id'], current_user['user_id']):
-                                st.success("삭제되었습니다!")
-                                st.rerun()
+                            st.session_state[f"confirm_delete_{post['post_id']}"] = True
 
-                with btn_cols[3]:
+                        if st.session_state.get(f"confirm_delete_{post['post_id']}", False):
+                            st.warning("정말 삭제할까요? 이 작업은 되돌릴 수 없습니다.")
+                            cc1, cc2 = st.columns(2)
+                            with cc1:
+                                if st.button("✅ 네, 삭제합니다", key=f"confirm_yes_{post['post_id']}"):
+                                    if post_mgr.delete_post(post['post_id'], current_user['user_id']):
+                                        st.toast("삭제되었습니다 🗑️")
+                                    st.session_state[f"confirm_delete_{post['post_id']}"] = False
+                                    st.rerun()
+                            with cc2:
+                                if st.button("❌ 취소", key=f"confirm_no_{post['post_id']}"):
+                                    st.session_state[f"confirm_delete_{post['post_id']}"] = False
+                                    st.toast("삭제가 취소되었습니다")
+
+                # 리트윗(타인 글)
+                with c4:
                     if post['user_id'] != current_user['user_id']:
                         if st.button("🔁", key=f"retweet_{post['post_id']}", help="리트윗"):
                             if post_mgr.retweet_post(current_user['user_id'], post['post_id']):
-                                st.success("리트윗되었습니다! 🔁")
+                                st.toast("리트윗 완료 🔁")
                             else:
-                                st.info("이미 리트윗한 글입니다.")
+                                st.toast("이미 리트윗한 글이거나 대상이 없습니다 ⚠️")
                             st.rerun()
-
-
-
-
         st.divider()
 
 
@@ -251,10 +236,9 @@ def show_profile_page(current_user, post_mgr, user_mgr):
     
     # 프로필 이미지 변경 섹션
     st.subheader("🖼️ 프로필 이미지 변경")
-    
-    # 사용 가능한 프로필 이미지 목록
+
     available_images = user_mgr.get_available_profile_images()
-    
+
     # 현재 선택된 이미지 찾기
     current_image = user_mgr.get_user_profile_image(current_user['user_id'])
     current_index = 0
@@ -262,25 +246,29 @@ def show_profile_page(current_user, post_mgr, user_mgr):
         if img == current_image:
             current_index = i
             break
-    
-    # 이미지 선택 드롭다운
+
+    custom_image_url = st.text_input("직접 이미지 URL 입력 (선택)", "")
+
     selected_image = st.selectbox(
         "프로필 이미지를 선택하세요:",
         options=available_images,
         index=current_index,
         format_func=lambda x: f"이미지 {available_images.index(x) + 1}"
     )
-    
-    # 선택된 이미지 미리보기
-    st.image(selected_image, width=100, caption="선택된 이미지")
-    
-    # 이미지 변경 버튼
+
+    # 직접 입력이 있으면 그걸로 미리보기
+    preview_image = custom_image_url if custom_image_url else selected_image
+    st.image(preview_image, width=100, caption="선택된 이미지")
+
     if st.button("💾 프로필 이미지 변경", type="primary"):
-        if user_mgr.update_profile_image(current_user['user_id'], selected_image):
-            st.success("프로필 이미지가 변경되었습니다! 🎉")
+        image_to_save = custom_image_url if custom_image_url else selected_image
+        success = user_mgr.update_profile_image(current_user['user_id'], image_to_save)
+        if success:
+            st.success("프로필 이미지가 변경되었습니다!")
+            st.session_state.current_user['profile_image'] = image_to_save
             st.rerun()
         else:
-            st.error("이미지 변경 중 오류가 발생했습니다.")
+            st.error("이미지 변경에 실패했습니다.")
     
     st.divider()
 
