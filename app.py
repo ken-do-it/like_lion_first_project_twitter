@@ -365,6 +365,7 @@ def show_profile_page(current_user, post_mgr, user_mgr, skills_mgr):
                 st.error("이미지 변경에 실패했습니다.")
         st.divider()
 
+
 def show_data_info () :
     st.header("📊 저장된 데이터 확인")
 
@@ -558,6 +559,7 @@ else:
     st.sidebar.title("📋 메뉴")
 
     menu = st.sidebar.selectbox(
+
     # "선택하세요",
     # ["🏠 홈", "✍️ 글쓰기", "👤 프로필"],
     # index=["🏠 홈", "✍️ 글쓰기", "👤 프로필"].index(st.session_state.menu)
