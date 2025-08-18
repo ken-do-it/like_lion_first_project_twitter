@@ -1,0 +1,4 @@
+user_id,user_name,password,created_at,profile_image
+user_001,테스트러,test123,2025-08-15,https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face
+user_002,lion,123,2025-08-15,https://images.unsplash.com/photo-1498026474556-93048b8493d8?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHx0b3BpYy1mZWVkfDEwMHw2c01WalRMU2tlUXx8ZW58MHx8fHx8
+user_003,kevin,123,2025-08-16,https://images.unsplash.com/photo-1583844056361-4418a8f2a985?q=80&w=1169&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D

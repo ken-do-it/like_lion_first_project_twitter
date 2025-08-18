@@ -1,0 +1,450 @@
+import streamlit as st
+import pandas as pd
+import time
+from auth import show_auth_page, logout_user
+from user_manager import UserManager
+from post_manager import PostManager
+from skills_manager import SkillsManager
+
+
+
+st.set_page_config(
+    page_title="개발 유니콘다",
+    page_icon="🦄",
+    layout='wide',
+    initial_sidebar_state="auto",  # 'auto' | 'expanded' | 'collapsed'
+    menu_items={                  # 우상단 메뉴 커스터마이즈
+        "Get Help": "https://likelionfirstprojecttwitter-main.streamlit.app/",
+        "Report a bug": "mailto:you@example.com",
+        "About": "파이썬 트위터 프로젝트 - 간단한 SNS 데모"
+    }
+)
+
+def show_home_page(current_user, post_mgr, user_mgr):
+    """홈 화면 - 게시글 목록 + 액션바 + 탭"""
+    # 안전장치
+    if current_user is None or 'user_id' not in current_user:
+        st.error("사용자 정보가 올바르지 않습니다.")
+        return
+    if post_mgr is None:
+        st.error("포스트 매니저가 초기화되지 않았습니다.")
+        return
+    if user_mgr is None:
+        st.error("사용자 매니저가 초기화되지 않았습니다.")
+        return
+
+    st.header("📝 최근 프롬프트")
+
+    # 데이터 로드
+    posts_with_likes = post_mgr.get_posts_with_likes()
+    if len(posts_with_likes) == 0:
+        st.info("📝 아직 작성된 프롬프트가 없습니다. 첫 번째 프롬프트를 작성해보세요!")
+        if st.button("✍️ 글쓰기로 이동"):
+            st.session_state.menu = "✍️ 글쓰기"
+            st.rerun()
+        return
+
+    users_df = user_mgr.load_users()
+    if 'profile_image' not in users_df.columns:
+        users_df['profile_image'] = ""
+
+    posts_display = posts_with_likes.merge(
+        users_df[['user_id', 'user_name', 'profile_image']],
+        on='user_id',
+        how='left'
+    )
+
+    # 탭 UI
+    tab1, tab2, tab3, tab4 = st.tabs(["🏠 홈", "✍️ 내가 쓴 글", "🔁 리트윗한 글", "❤️ 내가 좋아요한 글"])
+
+    # 전체 글
+    with tab1:
+        for _, post in posts_display.iterrows():
+            show_post_item(post, current_user, post_mgr, view_prefix="home")
+
+    # 내가 쓴 글
+    with tab2:
+        my_posts = posts_display[posts_display['user_id'] == current_user['user_id']]
+        if len(my_posts) == 0:
+            st.info("아직 내가 쓴 글이 없습니다.")
+        for _, post in my_posts.iterrows():
+            show_post_item(post, current_user, post_mgr, view_prefix="my")
+
+    # 내가 리트윗한 글
+    with tab3:
+        my_retweets = posts_display[
+            (posts_display['user_id'] == current_user['user_id']) &
+            (posts_display['is_retweet'] == True)
+        ]
+        if len(my_retweets) == 0:
+            st.info("아직 리트윗한 글이 없습니다.")
+        for _, post in my_retweets.iterrows():
+            show_post_item(post, current_user, post_mgr, view_prefix="retweet")
+
+    # 내가 좋아요한 글
+    with tab4:
+        # 내가 누른 좋아요 기록에서 post_id 목록 뽑기
+        likes_df = post_mgr.load_likes()
+        my_liked_ids = []
+        if len(likes_df) > 0:
+            my_liked_ids = likes_df.loc[likes_df['user_id'] == current_user['user_id'], 'post_id'].unique().tolist()
+
+        liked_posts = posts_display[posts_display['post_id'].isin(my_liked_ids)]
+
+        if len(liked_posts) == 0:
+            st.info("아직 좋아요한 글이 없습니다.")
+        else:
+            for _, post in liked_posts.iterrows():
+                # 키 충돌 방지용 prefix
+                show_post_item(post, current_user, post_mgr, view_prefix="liked")
+
+
+def show_post_item(post, current_user, post_mgr, view_prefix=""):
+    """게시글 하나 렌더링 (홈/탭 공통)"""
+    key_prefix = f"{view_prefix}_{post['post_id']}"  # ← 이 줄 추가!
+    with st.container():
+        # 상단: 아바타 + 사용자/시간
+        a, b = st.columns([1, 11])
+        with a:
+            # 프로필 이미지 안전하게 처리 (NaN 체크)
+            profile_image = post.get('profile_image')
+            if pd.isna(profile_image) or not profile_image:
+                avatar = "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=120&h=120&fit=crop&crop=face"
+            else:
+                avatar = str(profile_image)
+            st.image(avatar, width=50)
+        with b:
+            ts = post.get('time_stamp', '')
+            if pd.isna(ts) or not str(ts):
+                time_str = "시간 정보 없음"
+            else:
+                s = str(ts).split(' ')
+                time_str = s[1][:5] if len(s) > 1 else str(ts)
+            st.markdown(f"**{post.get('user_name', post['user_id'])}** • {time_str}")
+
+            # 본문: 리트윗 헤더 처리 + 인라인 수정 모드
+            if st.session_state.get('editing_post') == post['post_id'] and post['user_id'] == current_user['user_id']:
+                with st.form(f"edit_form_{post['post_id']}", clear_on_submit=False):
+                    edited = st.text_area("내용 수정", value=str(post.get('content', '') or ''), height=120)
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        if st.form_submit_button("💾 저장"):
+                            if edited and edited.strip():
+                                if post_mgr.update_post(post['post_id'], current_user['user_id'], edited.strip()):
+                                    st.toast("수정되었습니다 ✏️")
+                                    st.session_state.editing_post = None
+                                    st.rerun()
+                            else:
+                                st.warning("내용을 입력해주세요.")
+                    with c2:
+                        if st.form_submit_button("❌ 취소"):
+                            st.session_state.editing_post = None
+                            st.rerun()
+            else:
+                content = str(post.get('content', '') or '')
+                if content.startswith("🔁 리트윗:"):
+                    header, body = (content.split("\n", 1) + [""])[:2]
+                    st.markdown(f"**{header}**")
+                    if body:
+                        st.markdown(body)
+                else:
+                    st.markdown(content)
+
+            # 액션바 --------------------------
+            is_liked = post_mgr.is_liked_by_user(current_user['user_id'], post['post_id'])
+            like_emoji = "❤️" if is_liked else "🤍"
+            like_count = int(post.get('like_count', 0))
+
+            c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
+
+            # 좋아요
+            with c1:
+                if st.button(f"{like_emoji} {like_count}", key=f"like_{key_prefix}"):
+                    liked = post_mgr.toggle_like(current_user['user_id'], post['post_id'])
+                    st.toast("좋아요! ❤️" if liked else "좋아요 취소")
+                    st.rerun()
+
+            # 수정(작성자)
+            with c2:
+                if post['user_id'] == current_user['user_id']:
+                    if st.button("✏️", key=f"edit_{key_prefix}", help="수정"):
+                        st.session_state.editing_post = post['post_id']
+                        st.toast("수정 모드로 전환 ✏️")
+                        st.rerun()
+
+            # 삭제(작성자) - 2단계 확인
+            with c3:
+                if post['user_id'] == current_user['user_id']:
+                    if st.button("🗑️", key=f"del_{key_prefix}", help="삭제"):
+                        st.session_state[f"confirm_delete_{key_prefix}"] = True
+
+                    if st.session_state.get(f"confirm_delete_{key_prefix}", False):
+                        st.warning("정말 삭제할까요? 이 작업은 되돌릴 수 없습니다.")
+                        cc1, cc2 = st.columns(2)
+                        with cc1:
+                            if st.button("✅ 네, 삭제합니다", key=f"confirm_yes_{key_prefix}"):
+                                if post_mgr.delete_post(post['post_id'], current_user['user_id']):
+                                    st.toast("삭제되었습니다 🗑️")
+                                st.session_state[f"confirm_delete_{key_prefix}"] = False
+                                st.rerun()
+                        with cc2:
+                            if st.button("❌ 취소", key=f"confirm_no_{key_prefix}"):
+                                st.session_state[f"confirm_delete_{key_prefix}"] = False
+                                st.toast("삭제가 취소되었습니다")
+
+            # 리트윗(타인 글)
+            with c4:
+                if post['user_id'] != current_user['user_id']:
+                    if st.button("🔁", key=f"retweet_{key_prefix}", help="리트윗"):
+                        if post_mgr.retweet_post(current_user['user_id'], post['post_id']):
+                            st.toast("리트윗 완료 🔁")
+                        else:
+                            st.toast("이미 리트윗한 글이거나 대상이 없습니다 ⚠️")
+                        st.rerun()
+        st.divider()
+
+
+
+def show_write_page(current_user, post_mgr):
+    """글쓰기 페이지"""
+    st.header("✍️ 새 프롬프트 작성")
+
+    st.markdown("💡 **다른 사람들이 실제로 사용할 수 있는 프롬프트를 공유해보세요!**")
+
+    # 글쓰기 폼
+    with st.form("write_form", clear_on_submit=True):
+        content = st.text_area(
+            "프롬프트 내용",
+            placeholder="어떤 상황에서 사용하는 프롬프트인지, 어떻게 사용하는지 자세히 설명해주세요...",
+            height=200
+        )
+
+        col1, col2, col3 = st.columns([2, 1, 2])
+        with col2:
+            submitted = st.form_submit_button("🚀 게시하기", type="primary")
+
+        if submitted:
+            if content.strip():
+                success = post_mgr.create_post(current_user['user_id'], content.strip())
+
+                if success:
+                    st.success("프롬프트가 게시되었습니다! 🎉")
+                    st.balloons()
+                    import time
+                    time.sleep(1.5)  # 1.5초 잠시 멈춤
+                    st.session_state.menu = "🏠 홈"
+                    st.rerun()
+                else:
+                    st.error("게시 중 오류가 발생했습니다.")
+            else:
+                st.error("내용을 입력해주세요!")
+
+    st.divider()
+
+    # 프롬프트 작성 가이드
+    with st.expander("📝 좋은 프롬프트 작성 팁"):
+        st.markdown("""
+        **효과적인 프롬프트 작성법:**
+
+        1. **구체적으로 작성하기**
+        ```
+        ❌ "코딩 도와줘"
+        ✅ "파이썬으로 웹 크롤링 코드를 작성해주세요. 에러 처리와 주석도 포함해주세요."
+        ```
+
+        2. **사용 상황 설명하기**
+        ```
+        ✅ "ChatGPT에게 번역을 요청할 때 이 프롬프트를 사용하면 더 자연스러운 번역을 받을 수 있어요."
+        ```
+
+        3. **예시 포함하기**
+        ```
+        ✅ "예시: '안녕하세요'를 영어로 번역해주세요 → Hello! (친근한 인사)"
+        ```
+        """)
+
+
+
+def show_profile_page(current_user, post_mgr, user_mgr, skills_mgr):
+    """프로필 페이지"""
+    st.header("👤 내 프로필")
+    
+    # 사용자 정보 표시
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        current_profile_image = user_mgr.get_user_profile_image(current_user['user_id'])
+        st.image(current_profile_image, width=100)
+    with col2:
+        st.subheader(f"**{current_user['user_name']}**")
+        st.caption(f"가입일: {current_user['created_at']}")
+    
+    st.divider()
+
+    col1, col2 = st.columns([2,1])
+
+    # 추가 폼
+    with col1 :
+        with st.form(f"add_skill_form_{current_user['user_id']}", clear_on_submit=True):
+            new_skill = st.text_input("기술명 추가", "")
+            new_level = st.slider("숙련도(%)", 0, 100, 50)
+            submitted = st.form_submit_button("➕ 추가")
+            if submitted:
+                if new_skill.strip():
+                    skills_mgr.add_skill(
+                        user_id=current_user['user_id'],
+                        user_name=current_user['user_name'],
+                        skill_name=new_skill.strip(),
+                        level=new_level
+                    )
+                    st.success("추가되었습니다.")
+                    st.rerun()
+                else:
+                    st.warning("기술명을 입력해주세요.")
+
+        # 목록 표시
+        rows = skills_mgr.list_user_skills(current_user['user_id'])
+        for _, row in rows.iterrows():
+            skill_id = row['skill_id']
+            name = row['skill_name']
+            level = int(row['level'])
+
+            cols = st.columns([3, 5, 2, 2])
+            with cols[0]:
+                new_name = st.text_input("기술명", value=str(name), key=f"skill_name_{skill_id}")
+                if new_name != name:
+                    if new_name.strip():
+                        skills_mgr.rename_skill(skill_id, new_name.strip())
+                        st.toast("이름이 변경되었습니다.")
+                        st.rerun()
+                    else:
+                        st.warning("기술명은 비워둘 수 없습니다.")
+
+            with cols[1]:
+                st.progress(level)
+
+            with cols[2]:
+                new_lv = st.number_input("수정", min_value=0, max_value=100, value=level, key=f"skill_level_{skill_id}")
+                if new_lv != level:
+                    skills_mgr.update_skill_level(skill_id, int(new_lv))
+                    st.toast("숙련도를 업데이트했습니다.")
+                    st.rerun()
+
+            with cols[3]:
+                if st.button("🗑️ 삭제", key=f"del_skill_{skill_id}"):
+                    skills_mgr.delete_skill(skill_id)
+                    st.toast("삭제되었습니다.")
+                    st.rerun()
+
+    with col2 :
+        # 프로필 이미지 변경 섹션
+        st.subheader("🖼️ 프로필 이미지 변경")
+        available_images = user_mgr.get_available_profile_images()
+        current_image = user_mgr.get_user_profile_image(current_user['user_id'])
+        current_index = 0
+        for i, img in enumerate(available_images):
+            if img == current_image:
+                current_index = i
+                break
+        custom_image_url = st.text_input("직접 이미지 URL 입력 (선택)", "")
+        selected_image = st.selectbox(
+            "프로필 이미지를 선택하세요:",
+            options=available_images,
+            index=current_index,
+            format_func=lambda x: f"이미지 {available_images.index(x) + 1}"
+        )
+        preview_image = custom_image_url if custom_image_url else selected_image
+        st.image(current_image, width=100, caption="현재 이미지")
+        if st.button("💾 프로필 이미지 변경", type="primary"):
+            image_to_save = custom_image_url if custom_image_url else selected_image
+            success = user_mgr.update_profile_image(current_user['user_id'], image_to_save)
+            if success:
+                st.success("프로필 이미지가 변경되었습니다!")
+                st.session_state.current_user['profile_image'] = image_to_save
+                st.rerun()
+            else:
+                st.error("이미지 변경에 실패했습니다.")
+        st.divider()
+
+
+# 매니저 초기화
+@st.cache_resource
+def init_managers():
+    try:
+        user_mgr = UserManager()
+        post_mgr = PostManager()
+        skills_mgr = SkillsManager()   # 추가
+        return user_mgr, post_mgr, skills_mgr
+    except Exception as e:
+        st.error(f"매니저 초기화 중 오류가 발생했습니다: {str(e)}")
+        return None, None, None
+
+user_mgr, post_mgr, skills_mgr = init_managers()
+
+# 매니저 초기화 확인
+if user_mgr is None or post_mgr is None or skills_mgr is None:
+    st.error("⚠️ 시스템 초기화에 실패했습니다. 페이지를 새로고침해주세요.")
+    st.stop()
+
+
+# --- 세션 기본값 ---
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+
+if 'menu' not in st.session_state:
+    st.session_state.menu = "🏠 홈"
+
+if 'editing_post' not in st.session_state:
+    st.session_state.editing_post = None
+
+if not st.session_state.logged_in :
+    # 로그인 하지 않은 경우
+    show_auth_page()
+    st.stop()
+
+else: 
+    #로그인한 경우 
+    current_user = st.session_state.current_user    
+
+    st.title('🦄 개발 유니콘다')
+    
+    # 사이드바에 사용자 정보 표시
+    with st.sidebar:
+        # 사용자 프로필 이미지와 이름
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            current_profile_image = user_mgr.get_user_profile_image(current_user['user_id'])
+            st.image(current_profile_image, width=50)
+        with col2:
+            st.write(f"**{current_user['user_name']}님**")
+            st.caption("환영합니다! 👋")
+        
+        st.divider()
+        
+        if st.button("🚪 로그아웃", use_container_width=True):
+            st.session_state.logged_in = False
+            st.rerun() 
+
+    st.sidebar.title("📋 메뉴")
+
+    menu = st.sidebar.selectbox(
+    "선택하세요",
+    ["🏠 홈", "✍️ 글쓰기", "👤 프로필"],
+    index=["🏠 홈", "✍️ 글쓰기", "👤 프로필"].index(st.session_state.menu)
+    )
+
+
+
+        # 메뉴 변경 감지
+    if menu != st.session_state.menu:
+        st.session_state.menu = menu
+        st.rerun()
+
+
+    # 페이지 표시
+    if menu == "🏠 홈":
+        show_home_page(current_user, post_mgr, user_mgr)
+    elif menu == "✍️ 글쓰기":
+        show_write_page(current_user, post_mgr)
+    elif menu == "👤 프로필":
+        show_profile_page(current_user, post_mgr, user_mgr, skills_mgr)
+
